@@ -61,16 +61,21 @@
       // Keep the existing card image visible even if the first stored photo URL fails.
       image.removeAttribute("data-from");
       image.loading = "lazy";
-      image.style.width = "100%";
-      image.style.height = "100%";
-      image.style.objectFit = "cover";
+      image.style.cssText = "display:block!important;position:absolute;inset:0;width:100%!important;height:100%!important;max-width:none;object-fit:cover;object-position:center;opacity:1;visibility:visible;";
+      var photoIndex = 0;
       image.onerror = function () {
-        var fallback = (property.photos || []).find(function (url) {
-          return url && url !== image.src;
-        });
-        image.onerror = null;
-        if (fallback) image.src = fallback;
+        photoIndex += 1;
+        var photos = Array.isArray(property.photos) ? property.photos : [];
+        if (photoIndex < photos.length) {
+          image.src = photos[photoIndex];
+        } else {
+          image.onerror = null;
+          image.style.display = "none";
+          console.warn("Uttarkunth: no property photos could be loaded.", property.slug);
+        }
       };
+      var photoBox = image.closest(".ph");
+      if (photoBox) photoBox.style.cssText += ";position:relative;overflow:hidden;min-height:240px;";
       image.src = property.photos[0];
     }
 
@@ -136,15 +141,20 @@
       }
       image.alt = property.name || "Wonderway Retreat";
       image.loading = "lazy";
-      image.style.width = "100%";
-      image.style.height = "100%";
-      image.style.objectFit = "cover";
+      image.style.cssText = "display:block!important;position:absolute;inset:0;width:100%!important;height:100%!important;max-width:none;object-fit:cover;object-position:center;opacity:1;visibility:visible;";
+      var photoIndex = 0;
       image.onerror = function () {
+        photoIndex += 1;
         var photos = Array.isArray(property.photos) ? property.photos : [];
-        var fallback = photos.find(function (url) { return url && url !== image.src; });
-        image.onerror = null;
-        if (fallback) image.src = fallback;
+        if (photoIndex < photos.length) {
+          image.src = photos[photoIndex];
+        } else {
+          image.onerror = null;
+          image.style.display = "none";
+          console.warn("Uttarkunth: no property photos could be loaded.", property.slug);
+        }
       };
+      photoContainer.style.cssText += ";position:relative;overflow:hidden;min-height:240px;";
       image.src = photo;
     }
 

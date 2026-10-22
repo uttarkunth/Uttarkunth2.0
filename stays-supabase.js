@@ -58,9 +58,20 @@
       locationText(property) + ". Stay inside the landscape.";
 
     if (image && Array.isArray(property.photos) && property.photos[0]) {
-      image.src = property.photos[0];
+      // Keep the existing card image visible even if the first stored photo URL fails.
       image.removeAttribute("data-from");
       image.loading = "lazy";
+      image.style.width = "100%";
+      image.style.height = "100%";
+      image.style.objectFit = "cover";
+      image.onerror = function () {
+        var fallback = (property.photos || []).find(function (url) {
+          return url && url !== image.src;
+        });
+        image.onerror = null;
+        if (fallback) image.src = fallback;
+      };
+      image.src = property.photos[0];
     }
 
     var info = card.querySelector(".pi");
@@ -123,9 +134,18 @@
         image = document.createElement("img");
         photoContainer.appendChild(image);
       }
-      image.src = photo;
       image.alt = property.name || "Wonderway Retreat";
       image.loading = "lazy";
+      image.style.width = "100%";
+      image.style.height = "100%";
+      image.style.objectFit = "cover";
+      image.onerror = function () {
+        var photos = Array.isArray(property.photos) ? property.photos : [];
+        var fallback = photos.find(function (url) { return url && url !== image.src; });
+        image.onerror = null;
+        if (fallback) image.src = fallback;
+      };
+      image.src = photo;
     }
 
     var infoBox = card.querySelector(".pi");

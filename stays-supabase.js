@@ -18,10 +18,17 @@
 
   function makeWhatsAppUrl(property, room) {
     var message = "Hello " + (property.name || "Wonderway Retreat") +
-      "! I found your property on Uttarkunth Stays and would like to enquire about availability." +
-      (room ? " Room: " + room.room_name + ". Guests: " + room.max_guests +
-        ". Listed price: " + money(room.base_price) + " per night." : "") +
-      " Please share available dates and the total price. Thank you.";
+      "! I found your property on Uttarkunth Stays and would like to enquire about a booking.\n\n" +
+      "My booking details:\n" +
+      "Check-in date: [DD/MM/YYYY]\n" +
+      "Check-out date: [DD/MM/YYYY]\n" +
+      "Number of guests: [adults and children]\n" +
+      "Room requested: " + (room ? room.room_name : "[room type]") + "\n\n" +
+      (room ? "I saw the listed base rate of " + money(room.base_price) +
+        " per night for up to " + room.max_guests + " guests. Please confirm the current rate and total cost for my dates.\n\n" : "") +
+      "Could you please confirm whether the room is available for these dates? If it is unavailable, please suggest the nearest available alternative dates.\n\n" +
+      "Please also share the amenities and facilities available, including Wi-Fi, parking, meals, kitchenette, private bathroom, check-in/check-out timings, and any extra charges (where applicable). Kindly let me know what is included in the room rate.\n\n" +
+      "Thank you!";
     return wonderwayWhatsApp + "?text=" + encodeURIComponent(message);
   }
 

@@ -41,8 +41,45 @@ exports.handler=async event=>{
   }
   let b;try{b=JSON.parse(event.body||"{}");}catch{return json(400,{ok:false,error:"Invalid request."});}
   const action=b.action;
+  if(action==="save_property"){
+   const name=String(b.name||"").trim(),slug=name.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,90);
+   if(!name||!b.village||!b.district||!b.state||!b.description)return json(400,{ok:false,error:"Complete the required property details."});
+   const photos=Array.isArray(b.photos)?b.photos.filter(x=>/^https?:\/\//i.test(String(x))).slice(0,20):[];
+   const amenities=Array.isArray(b.amenities)?b.amenities.slice(0,40):[];
+   const record={slug,name,property_type:b.property_type||"homestay",village:String(b.village).slice(0,120),district:String(b.district).slice(0,120),state:String(b.state).slice(0,80),address:String(b.address||"").slice(0,300)||null,description:String(b.description).slice(0,3000),photos,amenities,booking_mode:"request",host_id:user.id,published:false,moderation_status:"pending",moderation_notes:null,reviewed_at:null,reviewed_by:null,updated_at:new Date().toISOString()};
+   if(b.property_id){
+    const existing=await db("properties?select=id,host_id&id=eq."+enc(b.property_id)+"&limit=1");
+    if(!existing[0]||(!isAdmin&&existing[0].host_id!==user.id))return json(403,{ok:false,error:"You cannot edit this property."});
+    const updated=await db("properties?id=eq."+enc(b.property_id),{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(record)});
+    return json(200,{ok:true,property:updated[0]||null,message:"Changes saved and sent for review."});
+   }
+   record.slug=slug+"-"+crypto.randomUUID().slice(0,6);
+   const created=await db("properties",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify(record)});
+   return json(201,{ok:true,property:created[0]||null,message:"Property submitted for admin review."});
+  }
+  if(action==="save_room"){
+   const prop=await db("properties?select=id,host_id&id=eq."+enc(b.property_id)+"&limit=1");
+   const ph=await db("property_hosts?select=id&property_id=eq."+enc(b.property_id)+"&user_id=eq."+enc(user.id)+"&limit=1");
+   if(!prop[0]||(!isAdmin&&prop[0].host_id!==user.id&&!ph.length))return json(403,{ok:false,error:"You do not manage this property."});
+   const rate=Number(b.base_price),capacity=Number(b.max_guests);
+   if(!String(b.room_name||"").trim()||!Number.isFinite(rate)||rate<0||!Number.isInteger(capacity)||capacity<1||capacity>30)return json(400,{ok:false,error:"Enter a valid room name, rate and guest capacity."});
+   const record={property_id:b.property_id,room_name:String(b.room_name).trim().slice(0,120),description:String(b.description||"").slice(0,1000)||null,base_price:rate,max_guests:capacity,active:true};
+   const created=await db("room_units",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify(record)});
+   return json(201,{ok:true,room:created[0]||null});
+  }
+  if(action==="accept_agreement"){
+   if(!b.property_id||b.accepted!==true)return json(400,{ok:false,error:"Explicit agreement acceptance is required."});
+   const prop=await db("properties?select=id,host_id,name&id=eq."+enc(b.property_id)+"&limit=1");
+   const ph=await db("property_hosts?select=id&property_id=eq."+enc(b.property_id)+"&user_id=eq."+enc(user.id)+"&limit=1");
+   if(!prop[0]||(!isAdmin&&prop[0].host_id!==user.id&&!ph.length))return json(403,{ok:false,error:"You do not manage this property."});
+   const existing=await db("host_agreements?select=id&property_id=eq."+enc(b.property_id)+"&limit=1");
+   const record={property_id:b.property_id,host_name:String(user.user_metadata&&user.user_metadata.full_name||user.email).slice(0,120),host_contact:user.email,host_user_id:user.id,agreement_start:new Date().toISOString().slice(0,10),agreement_end:null,commission_percent:0,intro_commission_percent:0,intro_period_months:12,standard_commission_percent:10,agreement_status:"active",accepted_at:new Date().toISOString(),terms_version:"uttarkunth-stays-2026-10-v1",notes:"0% introductory commission for 12 months, then 10% standard commission."};
+   if(existing[0])await db("host_agreements?id=eq."+enc(existing[0].id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(record)});
+   else await db("host_agreements",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify(record)});
+   return json(200,{ok:true,message:"Agreement acceptance recorded."});
+  }
   if(action==="respond_booking"){
-   const reqs=await db("booking_requests?select=id,property_id& id=eq."+enc(b.booking_request_id).replace("%20",""));
+   const reqs=await db("booking_requests?select=id,property_id&id=eq."+enc(b.booking_request_id));
    const req=reqs[0];if(!req)return json(404,{ok:false,error:"Booking request not found."});
    if(!isAdmin){
     const [p,ph]=await Promise.all([db("properties?select=id,host_id&id=eq."+enc(req.property_id)+"&limit=1"),db("property_hosts?select=id&property_id=eq."+enc(req.property_id)+"&user_id=eq."+enc(user.id)+"&limit=1")]);

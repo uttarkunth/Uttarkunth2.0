@@ -26,6 +26,12 @@ exports.handler=async event=>{
    return json(200,{ok:true,bookings:rows});
   }
   if(event.httpMethod==="POST"){
+   const ip=String(event.headers["x-nf-client-connection-ip"]||event.headers["x-forwarded-for"]||"unknown").split(",")[0].trim().slice(0,100);
+   const ipHash=hash(ip+"|uttarkunth-stays-rate-limit");
+   await db("booking_rate_limits",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({ip_hash:ipHash})});
+   const since=new Date(Date.now()-60*60*1000).toISOString();
+   const recent=await db("booking_rate_limits?select=id&ip_hash=eq."+enc(ipHash)+"&created_at=gte."+enc(since)+"&limit=11");
+   if(recent.length>10)return json(429,{ok:false,error:"Too many booking attempts from this connection. Please wait and try again later."});
    let b;try{b=JSON.parse(event.body||"{}");}catch{return json(400,{ok:false,error:"Invalid booking form data."});}
    const required=["property_id","room_unit_id","guest_name","guest_email","guest_phone","check_in","check_out"],missing=required.filter(k=>!clean(b[k],300));
    if(missing.length)return json(400,{ok:false,error:"Complete required fields.",fields:missing});

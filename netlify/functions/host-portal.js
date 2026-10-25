@@ -61,6 +61,7 @@ exports.handler=async event=>{
    const prop=await db("properties?select=id,host_id&id=eq."+enc(b.property_id)+"&limit=1");
    const ph=await db("property_hosts?select=id&property_id=eq."+enc(b.property_id)+"&user_id=eq."+enc(user.id)+"&limit=1");
    if(!prop[0]||(!isAdmin&&prop[0].host_id!==user.id&&!ph.length))return json(403,{ok:false,error:"You do not manage this property."});
+   if(!isAdmin){const agreement=await db("host_agreements?select=id&property_id=eq."+enc(b.property_id)+"&agreement_status=eq.active&accepted_at=not.is.null&limit=1");if(!agreement.length)return json(403,{ok:false,error:"Accept the host agreement for this property before adding bookable rooms."});}
    const rate=Number(b.base_price),capacity=Number(b.max_guests);
    if(!String(b.room_name||"").trim()||!Number.isFinite(rate)||rate<0||!Number.isInteger(capacity)||capacity<1||capacity>30)return json(400,{ok:false,error:"Enter a valid room name, rate and guest capacity."});
    const record={property_id:b.property_id,room_name:String(b.room_name).trim().slice(0,120),description:String(b.description||"").slice(0,1000)||null,base_price:rate,max_guests:capacity,active:true};

@@ -1,0 +1,27 @@
+name: Stays syntax checks
+on:
+  pull_request:
+    paths:
+      - 'stays-platform.js'
+      - 'host-portal.js'
+      - 'netlify/functions/**'
+      - '.github/workflows/stays-check.yml'
+  push:
+    branches:
+      - feat/uttarkunth-stays-full-stack
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        run: |
+          node --check stays-platform.js
+          node --check host-portal.js
+          node --check netlify/functions/properties.js
+          node --check netlify/functions/bookings.js
+          node --check netlify/functions/host-portal.js
+          node --check netlify/functions/stays-config.js

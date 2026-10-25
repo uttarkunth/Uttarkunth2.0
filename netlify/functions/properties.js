@@ -1,113 +1,78 @@
+const headers = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff"
+};
 
-exports.handler = async () => {
+function response(statusCode, payload) {
+  return { statusCode, headers, body: JSON.stringify(payload) };
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod !== "GET") {
+    return response(405, { ok: false, error: "Use GET to browse available stays." });
+  }
+
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
-
-  const headers = {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
-  };
-
   if (!supabaseUrl || !supabaseKey) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        ok: false,
-        error: "Supabase environment variables are not configured."
-      })
-    };
+    return response(503, { ok: false, error: "Stay listings are temporarily unavailable." });
+  }
+
+  async function getRows(path) {
+    const url = new URL(path, supabaseUrl);
+    const result = await fetch(url, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: "Bearer " + supabaseKey,
+        Accept: "application/json"
+      }
+    });
+    if (!result.ok) throw new Error("listing query failed");
+    return result.json();
   }
 
   try {
-    // Fetch published properties, including their photo URLs.
-    const endpoint = new URL("/rest/v1/properties", supabaseUrl);
-    endpoint.searchParams.set(
-      "select",
-      "id,slug,name,village,district,state,booking_mode,photos"
+    // Explicit public allow-list. Moderation and publication are both required.
+    const properties = await getRows(
+      "/rest/v1/properties?select=id,slug,name,description,address,village,district,state,latitude,longitude,amenities,photos,booking_mode,property_type&published=eq.true&moderation_status=eq.approved&order=name.asc"
     );
-    endpoint.searchParams.set("published", "eq.true");
-    endpoint.searchParams.set("order", "name.asc");
-
-    const response = await fetch(endpoint.toString(), {
-      method: "GET",
-      headers: {
-        "apikey": supabaseKey,
-        "Authorization": `Bearer ${supabaseKey}`,
-        "Accept": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      return {
-        statusCode: 502,
-        headers,
-        body: JSON.stringify({
-          ok: false,
-          error: "Supabase properties request failed.",
-          upstreamStatus: response.status
-        })
-      };
+    if (!properties.length) {
+      return response(200, { ok: true, count: 0, properties: [] });
     }
 
-    const properties = await response.json();
+    const ids = properties.map((property) => property.id).filter(Boolean);
+    if (!ids.length) return response(200, { ok: true, count: 0, properties: [] });
 
-    // Fetch room prices and capacity for these properties.
-    const roomsEndpoint = new URL("/rest/v1/room_units", supabaseUrl);
-    roomsEndpoint.searchParams.set(
-      "select",
-      "id,property_id,room_name,description,max_guests,base_price,active"
+    const rooms = await getRows(
+      "/rest/v1/room_units?select=id,property_id,room_name,description,max_guests,base_price,active&active=eq.true&property_id=in.(" +
+      ids.map(encodeURIComponent).join(",") + ")&order=base_price.asc"
     );
-    roomsEndpoint.searchParams.set("active", "eq.true");
 
-    const roomsResponse = await fetch(roomsEndpoint.toString(), {
-      method: "GET",
-      headers: {
-        "apikey": supabaseKey,
-        "Authorization": `Bearer ${supabaseKey}`,
-        "Accept": "application/json"
-      }
-    });
-
-    if (!roomsResponse.ok) {
-      return {
-        statusCode: 502,
-        headers,
-        body: JSON.stringify({
-          ok: false,
-          error: "Supabase room information request failed.",
-          upstreamStatus: roomsResponse.status
-        })
-      };
+    const byProperty = new Map();
+    for (const room of rooms) {
+      if (!byProperty.has(room.property_id)) byProperty.set(room.property_id, []);
+      byProperty.get(room.property_id).push({
+        id: room.id,
+        property_id: room.property_id,
+        room_name: room.room_name,
+        description: room.description,
+        max_guests: room.max_guests,
+        base_price: room.base_price
+      });
     }
 
-    const rooms = await roomsResponse.json();
-
-    // Attach each property's rooms using its property ID.
-    const propertiesWithRooms = properties.map((property) => ({
+    const publicProperties = properties.map((property) => ({
       ...property,
-      rooms: rooms.filter(
-        (room) => room.property_id === property.id
-      )
+      rooms: byProperty.get(property.id) || []
     }));
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        ok: true,
-        count: propertiesWithRooms.length,
-        properties: propertiesWithRooms
-      })
-    };
-  } catch (error) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        ok: false,
-        error: "Unable to reach Supabase. Check the project URL and function environment."
-      })
-    };
+    return response(200, {
+      ok: true,
+      count: publicProperties.length,
+      properties: publicProperties
+    });
+  } catch (_) {
+    return response(503, { ok: false, error: "Stay listings are temporarily unavailable." });
   }
 };

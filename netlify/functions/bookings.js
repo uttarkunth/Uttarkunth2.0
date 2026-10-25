@@ -3,7 +3,8 @@ const crypto = require("crypto");
 const headers = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
-  "X-Content-Type-Options": "nosniff"
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer"
 };
 
 function response(statusCode, payload) {
@@ -112,6 +113,9 @@ exports.handler = async (event) => {
     }
 
     let body;
+    if (Buffer.byteLength(event.body || "", "utf8") > 16000) {
+      return response(413, { ok: false, error: "The request is too large. Please shorten your booking details." });
+    }
     try { body = JSON.parse(event.body || "{}"); } catch (_) { return response(400, { ok: false, error: "Please submit valid booking details." }); }
     if (!body || typeof body !== "object" || Array.isArray(body)) return response(400, { ok: false, error: "Please submit valid booking details." });
     const action = body.action || "create";
@@ -142,7 +146,7 @@ exports.handler = async (event) => {
         encodeURIComponent(reference) + "&guest_access_token_hash=eq." + tokenHash(token) + "&limit=1");
       if (!found.length) return response(404, { ok: false, error: "We couldn't find a booking with those details." });
       const b = found[0];
-      if (!["pending", "confirmed"].includes(b.status)) return response(409, { ok: false, error: "This booking cannot be cancelled online." });
+      if (b.status !== "pending") return response(409, { ok: false, error: "Only pending booking requests can be cancelled online. For confirmed stays, please contact the property." });
       if (b.status === "confirmed" && b.check_in <= todayInIndia()) return response(409, { ok: false, error: "Contact the property to discuss a cancellation on or after check-in." });
       const r = await db("/rest/v1/stay_bookings?id=eq." + encodeURIComponent(b.id) + "&booking_reference=eq." +
         encodeURIComponent(reference) + "&guest_access_token_hash=eq." + tokenHash(token) + "&status=eq." + encodeURIComponent(b.status), {

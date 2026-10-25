@@ -1,0 +1,26 @@
+name: Uttarkunth2.0 Stays security checks
+
+on:
+  push:
+    branches: [feat/stays-secure-booking-platform]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'netlify/functions/**'
+      - 'supabase/migrations/**'
+      - 'tests/**'
+      - 'netlify.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  static-security-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run security contract tests
+        run: node --test tests/stays-security.test.mjs

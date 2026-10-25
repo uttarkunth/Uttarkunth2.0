@@ -13,8 +13,11 @@ exports.handler = async (event) => {
     return response(405, { ok: false, error: "Use GET to browse available stays." });
   }
 
+  // This endpoint runs only on Netlify's server. Direct public-table reads are
+  // intentionally restricted by the live RLS policy, so use the server-only
+  // service key here and return an explicit public allow-list below.
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseKey) {
     return response(503, { ok: false, error: "Stay listings are temporarily unavailable." });
   }
@@ -33,7 +36,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Explicit public allow-list. Moderation and publication are both required.
+    // Explicit public allow-list. Never return host or private moderation fields.
     const properties = await getRows(
       "/rest/v1/properties?select=id,slug,name,description,address,village,district,state,latitude,longitude,amenities,photos,booking_mode,property_type&published=eq.true&moderation_status=eq.approved&order=name.asc"
     );

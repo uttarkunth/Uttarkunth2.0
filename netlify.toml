@@ -2,6 +2,10 @@
   publish = "."
   functions = "netlify/functions"
 
+[[edge_functions]]
+  function = "stays-nav"
+  path = "/*"
+
 [[headers]]
   for = "/*"
   [headers.values]

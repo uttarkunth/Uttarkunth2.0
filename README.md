@@ -1,21 +1,47 @@
-# UTTARKUNTH website — GitHub + Netlify
+# Uttarkunth website + Uttarkunth Stays
 
-This is a static website package made from your supplied UTTARKUNTH HTML file. The homepage is `index.html`; the design and embedded image assets are kept in that file.
+This repository serves the existing Uttarkunth website and the multi-page Uttarkunth Stays marketplace.
 
-## Publish with GitHub and Netlify
+## Architecture
 
-1. Extract this ZIP file.
-2. Create a new repository on GitHub, for example `uttarkunth-website`.
-3. Upload `index.html`, `netlify.toml`, and this README to the repository root (not inside another nested folder). Commit the files.
-4. Sign in to Netlify and choose **Add new site → Import an existing project**.
-5. Connect GitHub, select `uttarkunth-website`, and authorize access if asked.
-6. In deploy settings, set **Build command** to blank / none and **Publish directory** to `.`. The included `netlify.toml` already specifies the publish directory.
-7. Click **Deploy site**. Netlify will provide a public `*.netlify.app` URL.
-8. Future commits pushed to the connected GitHub repository will trigger a new deployment automatically.
+- **Netlify:** serves the static website. The existing lightweight `stays-nav` Edge Function only adds the Stays navigation link to the legacy, single-file homepage so that the homepage can remain intact.
+- **Supabase:** PostgreSQL, Auth, Storage, and the `stays-catalog`, `stays-bookings`, `stays-host`, and `stays-admin` Edge Functions handle live listings and platform operations. There are no new Netlify Functions in the booking path.
+- **GitHub:** source of truth for website and backend function code.
 
-## Important notes
+The site has no build command: `netlify.toml` publishes the repository root. Nested Stays routes are rewritten to `/stays/index.html`; static assets are served as usual.
 
-- The site is static HTML and does not need `npm install` or a build command.
-- Website images encoded directly in the HTML are retained, so there are no local image folders to upload.
-- Review the email, WhatsApp, YouTube, Google Maps, reviews, and video links in `index.html` before publishing to ensure they are current and intended to be public.
-- This package does not push to your GitHub account or create a Netlify site for you; you will need to sign in and complete those steps.
+## Stays pages
+
+- `/stays/` — marketplace home
+- `/stays/search` — search, filter and sort real published listings
+- `/stays/property/:slug` — listing details and room selection
+- `/stays/checkout` — date validation, availability check and booking request
+- `/stays/booking?ref=...` — request confirmation and private credentials
+- `/stays/trips` — private booking lookup and pending request cancellation
+- `/stays/account` — Supabase Auth account
+- `/stays/host` — host workspace, listings, rooms/rates, bookings and blocked dates
+- `/stays/admin` — moderation, bookings, verified host assignments, agreements and audit history
+
+## Supabase Edge Functions and secrets
+
+The four functions are in `supabase/functions/`. Configure required server-side function environment variables in the Supabase project settings if they are not already present:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` — **server-side only; never place this value in the frontend or repository**
+
+The frontend uses only the project's public anon key. Never commit a service-role key.
+
+## Booking policy
+
+- Booking requests are not confirmed until the host or an authorized administrator confirms them.
+- The database remains authoritative for dates, inventory, rates, booking status and the commission snapshot.
+- A pending request is automatically released after 24 hours if no decision has been made.
+- Online payments and Google Maps are not required for core functionality and remain disabled until deliberately configured.
+- Host listings stay unpublished until reviewed by Uttarkunth.
+- Existing listings are not automatically reassigned to newly created host accounts.
+- Introductory commission (0% for 12 months, then 10%) applies only through an actual recorded agreement; existing agreements are not silently rewritten.
+
+## Deployment and verification
+
+Push/merge the changes and let the existing Netlify site publish the static files. Confirm the live Stays route and test guest request, host decision and admin flows before taking live bookings. A successful GitHub commit or Edge Function deployment does not alone prove the Netlify production deployment is complete.
